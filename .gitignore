@@ -1,0 +1,58 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+.idea/
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+bin/
+out/
+*.log
+*.gz
+
+.env
+.env.local
+stacktrace.log
+
+# Docker
+.docker/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+#Maven
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.utils/
+pom.xml.v
+pom.xml.next
+release.properties
