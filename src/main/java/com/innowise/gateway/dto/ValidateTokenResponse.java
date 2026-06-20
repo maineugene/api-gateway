@@ -1,16 +1,19 @@
 package com.innowise.gateway.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class RegistrationRequest {
+public class ValidateTokenResponse {
 
-    private String name;
-    private String surname;
+    private boolean valid;
+    private Long userId;
     private String email;
-    private String password;
+    private List<String> roles;
 }

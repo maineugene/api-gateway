@@ -1,83 +1,84 @@
 package com.innowise.gateway.filter;
 
-import com.innowise.gateway.exception.GatewayException;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import lombok.RequiredArgsConstructor;
+import com.innowise.gateway.dto.ValidateTokenRequest;
+import com.innowise.gateway.dto.ValidateTokenResponse;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cloud.gateway.filter.GatewayFilter;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE)
-@RequiredArgsConstructor
-public class JwtAuthenticationFilter implements GatewayFilter {
+public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
-    @Value("${jwt.secret}")
-    private String jwtSecret;
+    private final WebClient.Builder webClientBuilder;
+    private final String authServiceUrl;
 
-    private static final List<String> PUBLIC_ENDPOINTS = List.of(
+    private static final List<String> EXCLUDED_PATHS = List.of(
             "/api/auth/token",
-            "/api/auth/validate",
-            "/api/auth/refresh"
+            "/api/register"
     );
+
+    public JwtAuthenticationFilter(WebClient.Builder webClientBuilder,
+                                   @Value("${services.auth-service.url}") String authServiceUrl) {
+        this.webClientBuilder = webClientBuilder;
+        this.authServiceUrl = authServiceUrl;
+    }
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
-        String path = request.getPath().value();
+        String path = request.getURI().getPath();
 
-        if (isPublicEndpoint(path)) {
+        if (EXCLUDED_PATHS.stream().anyMatch(path::startsWith)) {
             return chain.filter(exchange);
         }
 
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new GatewayException("Missing or invalid Authorization header", HttpStatus.UNAUTHORIZED);
+            return onError(exchange, HttpStatus.UNAUTHORIZED);
         }
 
         String token = authHeader.substring(7);
+        WebClient authServiceClient = webClientBuilder.baseUrl(authServiceUrl).build();
 
-        try {
-            Claims claims = validateToken(token);
-
-            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
-                    .header("X-User-Id", claims.get("userId", String.class))
-                    .header("X-User-Email", claims.get("email", String.class))
-                    .header("X-User-Roles", claims.get("roles", String.class))
-                    .build();
-
-            return chain.filter(exchange.mutate().request(mutatedRequest).build());
-        } catch (Exception e) {
-            throw new GatewayException("Invalid JWT token: " + e.getMessage(), HttpStatus.UNAUTHORIZED);
-        }
+        return authServiceClient.post()
+                .uri("/api/auth/validate")
+                .bodyValue(new ValidateTokenRequest(token))
+                .retrieve()
+                .bodyToMono(ValidateTokenResponse.class)
+                .flatMap(response -> {
+                    if (response != null && response.isValid()) {
+                        ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                                .header("X-User-Id", String.valueOf(response.getUserId()))
+                                .header("X-User-Email", response.getEmail())
+                                .header("X-User-Roles", String.join(",", response.getRoles()))
+                                .build();
+                        return chain.filter(exchange.mutate().request(mutatedRequest).build());
+                    } else {
+                        return onError(exchange, HttpStatus.UNAUTHORIZED);
+                    }
+                })
+                .onErrorResume(e -> onError(exchange, HttpStatus.UNAUTHORIZED));
     }
 
-    private boolean isPublicEndpoint(String path) {
-        return PUBLIC_ENDPOINTS.stream().anyMatch(path::startsWith) ||
-                path.startsWith("/fallback/");
+    private Mono<Void> onError(ServerWebExchange exchange, HttpStatus status) {
+        ServerHttpResponse response = exchange.getResponse();
+        response.setStatusCode(status);
+        return response.setComplete();
     }
 
-    private Claims validateToken(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+    @Override
+    public int getOrder() {
+        return -1;
     }
 }

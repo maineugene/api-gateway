@@ -1,0 +1,132 @@
+services:
+  auth-db:
+    image: postgres:15-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "5431:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - system-net
+
+  user-db:
+    image: postgres:15-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_DB: user_service_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "5432:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    networks:
+      - system-net
+
+  order-db:
+    image: postgres:15-alpine
+    container_name: order-db
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "5433:5432"
+    volumes:
+      - order_db_data:/var/lib/postgresql/data
+    networks:
+      - system-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    networks:
+      - system-net
+
+  auth-service:
+    build:
+      context: ../authservice
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-root}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      - auth-db
+      - redis
+    networks:
+      - system-net
+
+  user-service:
+    build:
+      context: ../userservice
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/user_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-root}
+    depends_on:
+      - user-db
+    networks:
+      - system-net
+
+  order-service:
+    build:
+      context: ../orderservice
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://order-db:5432/order_db
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-root}
+    depends_on:
+      - order-db
+    networks:
+      - system-net
+
+  gateway-service:
+    build:
+      context: ../apigateway
+      dockerfile: Dockerfile
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: 8080
+      AUTH_SERVICE_URL: http://auth-service:8081
+      USER_SERVICE_URL: http://user-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+    depends_on:
+      - auth-service
+      - user-service
+      - order-service
+    networks:
+      - system-net
+
+networks:
+  system-net:
+    driver: bridge
+
+volumes:
+  auth_db_data:
+    driver: local
+  user_db_data:
+    driver: local
+  order_db_data:
+    driver: local
