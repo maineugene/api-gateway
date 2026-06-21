@@ -1,3 +1,33 @@
+server:
+  port: 8080
+
 spring:
   application:
-    name: apigateway
+    name: gateway-service
+  cloud:
+    gateway:
+      routes:
+        - id: auth-service
+          uri: ${services.auth-service.url}
+          predicates:
+            - Path=/api/auth/
+        - id: user-service-users
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/api/users/
+        - id: user-service-cards
+          uri: ${services.user-service.url}
+          predicates:
+            - Path=/api/cards/
+        - id: order-service
+          uri: ${services.order-service.url}
+          predicates:
+            - Path=/api/orders/
+
+services:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8082}
+  order-service:
+    url: ${ORDER_SERVICE_URL:http://localhost:8083}
