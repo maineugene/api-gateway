@@ -15,6 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+/**
+ * REST controller for user registration.
+ * Handles registration flow: creates user in User Service and credentials in Auth Service.
+ * Implements rollback mechanism if Auth Service fails.
+ */
 @RestController
 @RequestMapping("/api/register")
 public class RegistrationController {
@@ -31,6 +36,14 @@ public class RegistrationController {
         this.authServiceUrl = authServiceUrl;
     }
 
+    /**
+     * Registers a new user.
+     * Creates user profile in User Service, then creates credentials in Auth Service.
+     * If Auth Service fails, deactivates the user profile (rollback).
+     *
+     * @param request registration data (email, password, name, surname)
+     * @return HTTP 201 CREATED on success, error otherwise
+     */
     @PostMapping
     public Mono<ResponseEntity<Void>> register(@RequestBody RegistrationRequest request) {
         WebClient userServiceClient = webClientBuilder.baseUrl(userServiceUrl).build();

@@ -25,7 +25,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final List<String> EXCLUDED_PATHS = List.of(
             "/api/auth/token",
-            "/api/register"
+            "/api/register",
+            "/api/auth/refresh"
     );
 
     public JwtAuthenticationFilter(WebClient.Builder webClientBuilder,
